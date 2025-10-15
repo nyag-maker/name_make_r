@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>맞춤 이름 생성기</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons CDN -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        /* 커스텀 스타일 및 폰트 설정 (Inter 폰트 사용) */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f7f3f8; /* 은은한 배경색 */
+        }
+        .container-card {
+            max-width: 500px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+        }
+        .input-group label {
+            font-weight: 600;
+            color: #4a5568;
+        }
+        .btn-primary {
+            background-color: #7b34b9; /* 보라색 계열 */
+            color: white;
+            transition: background-color 0.2s;
+        }
+        .btn-primary:hover {
+            background-color: #9f65d6;
+        }
+        .btn-secondary {
+            border: 2px solid #a0aec0;
+            color: #4a5568;
+            transition: all 0.2s;
+        }
+        .btn-secondary:hover {
+            background-color: #edf2f7;
+        }
+        .result-box {
+            background-color: #ffffff;
+            border: 3px solid #7b34b9;
+            box-shadow: 0 4px 10px rgba(123, 52, 185, 0.2);
+        }
+        .loading-spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #7b34b9;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        #generated-name-list {
+            list-style-type: none;
+            padding-left: 0;
+            white-space: pre-wrap; /* LLM이 생성한 줄바꿈과 목록 형식을 유지 */
+        }
+        #generated-name-list li {
+            padding: 4px 0;
+            font-size: 1.1rem;
+            font-weight: 500;
+        }
+    </style>
+</head>
+<body class="flex flex-col items-center justify-center min-h-screen p-4">
+
+    <!-- 메인 카드 컨테이너 -->
+    <div id="app-container" class="container-card w-full p-8 bg-white rounded-xl">
+        <h1 class="text-3xl font-extrabold text-center mb-6 text-[#7b34b9]">
+            ✨ 맞춤 이름 생성기
+        </h1>
+
+        <!-- 1. 시작 화면 -->
+        <div id="start-screen" class="space-y-4">
+            <p class="text-center text-gray-600 mb-6">
+                어떤 종류의 이름을 생성하고 싶으신가요?
+            </p>
+
+            <div class="grid grid-cols-2 gap-4">
+                <!-- onclick 제거 및 data-type 추가 -->
+                <button data-type="닉네임" class="name-type-btn btn-secondary flex items-center justify-center p-4 rounded-lg font-bold text-lg">
+                    <i data-lucide="sparkles" class="w-6 h-6 mr-2 text-yellow-500"></i> 닉네임
+                </button>
+                <button data-type="가명" class="name-type-btn btn-secondary flex items-center justify-center p-4 rounded-lg font-bold text-lg">
+                    <i data-lucide="mask" class="w-6 h-6 mr-2 text-gray-500"></i> 가명
+                </button>
+                <button data-type="영어 이름" class="name-type-btn btn-secondary flex items-center justify-center p-4 rounded-lg font-bold text-lg">
+                    <i data-lucide="a-arrow-up" class="w-6 h-6 mr-2 text-blue-500"></i> 영어 이름
+                </button>
+                <button data-type="일본어 이름" class="name-type-btn btn-secondary flex items-center justify-center p-4 rounded-lg font-bold text-lg">
+                    <i data-lucide="flag" class="w-6 h-6 mr-2 text-red-500"></i> 일본어 이름
+                </button>
+            </div>
+            
+            <div class="pt-6 border-t mt-6 border-gray-200">
+                <p class="text-center text-gray-600 mb-4 font-semibold">
+                    혹은, 실제 이름을 변환하고 싶으신가요?
+                </p>
+                <!-- onclick 제거 및 id 추가 -->
+                <button id="show-convert-btn" class="btn-primary w-full p-4 rounded-lg font-bold">
+                    <i data-lucide="globe" class="w-5 h-5 mr-2"></i> 실제 이름 변환하기
+                </button>
+            </div>
+        </div>
+
+        <!-- 2. 입력 화면 (닉네임/가명/영어/일본어) -->
+        <div id="input-screen" class="hidden space-y-5">
+            <!-- onclick 제거 및 id 추가 -->
+            <button id="back-from-input-btn" class="text-gray-500 hover:text-gray-800 flex items-center mb-4">
+                <i data-lucide="arrow-left" class="w-5 h-5 mr-1"></i> 처음으로
+            </button>
+            <h2 class="text-2xl font-bold mb-4 text-[#7b34b9]" id="input-title"></h2>
+
+            <div class="input-group space-y-3">
+                <label for="personality" class="block">성격 (예: 활발하고 긍정적)</label>
+                <textarea id="personality" rows="2" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#7b34b9] resize-none" placeholder="자신의 성격을 자세히 설명해주세요."></textarea>
+            </div>
+
+            <div class="input-group space-y-3">
+                <label for="appearance" class="block">외모 (예: 밝은 갈색 머리, 오목조목한 이목구비)</label>
+                <textarea id="appearance" rows="2" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#7b34b9] resize-none" placeholder="자신이 생각하는 외모의 특징을 적어주세요."></textarea>
+            </div>
+
+            <div class="input-group space-y-3">
+                <label for="feature" class="block">가장 부각하고 싶은 특징 (예: 여행을 좋아하는 모험가)</label>
+                <textarea id="feature" rows="2" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#7b34b9] resize-none" placeholder="이름에 담고 싶은 개성이나 취미를 적어주세요."></textarea>
+            </div>
+
+             <!-- 생성할 이름 개수 추가 -->
+             <div class="input-group space-y-3">
+                <label for="quantity" class="block">생성할 이름 개수 (최대 10개)</label>
+                <input type="number" id="quantity" min="1" max="10" value="3" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#7b34b9]">
+            </div>
+
+            <!-- 닉네임 글자 수 설정 (닉네임 선택 시에만 표시) -->
+            <div id="nickname-length-container" class="input-group space-y-3 hidden">
+                <label for="nickname-length" class="block">닉네임 글자 수</label>
+                <input type="number" id="nickname-length" min="2" max="10" value="4" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#7b34b9]">
+                <p class="text-sm text-gray-500">2글자에서 10글자 사이로 설정해주세요.</p>
+            </div>
+
+            <!-- onclick 제거 및 id 추가 -->
+            <button id="generate-btn" class="btn-primary w-full p-4 rounded-lg font-bold flex items-center justify-center">
+                <i data-lucide="wand-2" class="w-5 h-5 mr-2"></i> 이름 생성하기
+            </button>
+        </div>
+
+        <!-- 3. 실제 이름 변환 화면 -->
+        <div id="convert-screen" class="hidden space-y-5">
+            <!-- onclick 제거 및 id 추가 -->
+            <button id="back-from-convert-btn" class="text-gray-500 hover:text-gray-800 flex items-center mb-4">
+                <i data-lucide="arrow-left" class="w-5 h-5 mr-1"></i> 처음으로
+            </button>
+            <h2 class="text-2xl font-bold mb-4 text-[#7b34b9]">실제 이름 변환</h2>
+            
+            <div class="input-group space-y-3">
+                <label for="real-name" class="block">실제 한국어 이름</label>
+                <input type="text" id="real-name" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#7b34b9]" placeholder="예: 김채현">
+            </div>
+
+            <div class="input-group space-y-3">
+                <label for="convert-type" class="block">변환할 언어</label>
+                <select id="convert-type" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#7b34b9]">
+                    <option value="영어">영어 이름</option>
+                    <option value="일본어">일본어 이름</option>
+                </select>
+            </div>
+
+            <!-- 변환할 이름 개수 추가 -->
+            <div class="input-group space-y-3">
+                <label for="convert-quantity" class="block">변환할 이름 개수 (최대 10개)</label>
+                <input type="number" id="convert-quantity" min="1" max="10" value="3" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#7b34b9]">
+            </div>
+            
+            <!-- onclick 제거 및 id 추가 -->
+            <button id="convert-btn" class="btn-primary w-full p-4 rounded-lg font-bold flex items-center justify-center">
+                <i data-lucide="repeat-2" class="w-5 h-5 mr-2"></i> 변환하기
+            </button>
+        </div>
+
+
+        <!-- 4. 결과 화면 -->
+        <div id="result-screen" class="hidden space-y-6 text-center">
+            <h2 class="text-xl font-semibold text-gray-700">짜잔! 당신의 맞춤 이름이 완성되었어요!</h2>
+            
+            <div class="result-box p-6 rounded-xl">
+                <p id="result-label" class="text-md text-gray-500 mb-2"></p>
+                <!-- 리스트 출력용 div로 변경 -->
+                <div id="generated-name-list" class="text-left max-h-64 overflow-y-auto p-4 rounded-lg bg-gray-50 border border-gray-300 font-medium text-gray-800">
+                    <!-- 생성된 이름 목록이 여기에 표시됩니다. -->
+                </div>
+            </div>
+
+            <div class="flex space-x-4">
+                <!-- onclick 제거 및 id 추가 -->
+                <button id="regenerate-btn" class="btn-secondary flex-1 p-4 rounded-lg font-bold flex items-center justify-center">
+                    <i data-lucide="refresh-cw" class="w-5 h-5 mr-2"></i> 재생성
+                </button>
+                <!-- onclick 제거 및 id 추가 -->
+                <button id="back-to-start-btn" class="btn-primary flex-1 p-4 rounded-lg font-bold flex items-center justify-center">
+                    <i data-lucide="home" class="w-5 h-5 mr-2"></i> 처음으로 돌아가기
+                </button>
+            </div>
+        </div>
+
+        <!-- 로딩 인디케이터 및 오류 메시지 -->
+        <div id="loading" class="hidden flex flex-col items-center justify-center p-8 text-center">
+            <div class="loading-spinner mb-4"></div>
+            <p class="text-lg font-medium text-gray-600">이름을 생성하는 중이에요...</p>
+        </div>
+        
+        <div id="error-message" class="hidden p-4 mt-6 bg-red-100 border border-red-400 text-red-700 rounded-lg text-center">
+            <p class="font-bold">오류 발생!</p>
+            <p id="error-text">이름 생성 중 문제가 발생했습니다.</p>
+        </div>
+
+    </div>
+
+    <!-- 제작자 크레딧 -->
+    <p class="mt-6 text-xs text-gray-400">
+        제작자는 대구국제고등학교 김채현
+    </p>
+
+    <script type="module">
+        // Lucide Icons 초기화
+        lucide.createIcons();
+
+        // Gemini API 설정
+        const apiKey = ""; // API Key는 런타임 환경에서 제공됩니다.
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+
+        // 전역 상태 관리
+        let currentNameType = '';
+        let lastInputData = {};
+        let isConvertingRealName = false;
+
+        const screens = {
+            start: document.getElementById('start-screen'),
+            input: document.getElementById('input-screen'),
+            convert: document.getElementById('convert-screen'),
+            result: document.getElementById('result-screen'),
+            loading: document.getElementById('loading'),
+            error: document.getElementById('error-message')
+        };
+
+        function showScreen(screenToShow) {
+            Object.values(screens).forEach(screen => {
+                if (screen && screen !== screens.error && screen !== screens.loading) {
+                    screen.classList.add('hidden');
+                }
+            });
+            if (screenToShow) {
+                screenToShow.classList.remove('hidden');
+            }
+            screens.error.classList.add('hidden'); // 화면 전환 시 오류 메시지 숨김
+        }
+
+        function showError(message) {
+            screens.error.classList.remove('hidden');
+            document.getElementById('error-text').textContent = message;
+            screens.loading.classList.add('hidden');
+        }
+
+        function showStartScreen() {
+            currentNameType = '';
+            lastInputData = {};
+            isConvertingRealName = false;
+            showScreen(screens.start);
+        }
+
+        function showInput(type) {
+            currentNameType = type;
+            document.getElementById('input-title').textContent = `${type} 생성`;
+            
+            const lengthContainer = document.getElementById('nickname-length-container');
+            if (type === '닉네임') {
+                lengthContainer.classList.remove('hidden');
+            } else {
+                lengthContainer.classList.add('hidden');
+            }
+            
+            showScreen(screens.input);
+        }
+
+        function showConvertScreen() {
+            isConvertingRealName = true;
+            showScreen(screens.convert);
+        }
+
+        function showResult(namesText, label) {
+            const listElement = document.getElementById('generated-name-list');
+            document.getElementById('result-label').textContent = label;
+            
+            // 모델이 생성한 텍스트를 마크다운 목록(불릿)으로 간주하고 innerHTML로 표시
+            // 마크다운 * 리스트를 <ul><li>로 변환하는 간단한 함수 사용 (안정성을 위해 <pre> 태그 대신)
+            const htmlList = namesText.split('\n')
+                .map(line => line.trim())
+                .filter(line => line.startsWith('*') || line.startsWith('-')) // 마크다운 리스트 요소 필터링
+                .map(line => `<li>${line.substring(1).trim()}</li>`) // * 또는 - 제거 후 <li> 태그로 감싸기
+                .join('');
+            
+            if (htmlList) {
+                listElement.innerHTML = `<ul>${htmlList}</ul>`;
+            } else {
+                // 목록 형식이 아닌 일반 텍스트로 돌아왔을 경우 처리 (예: 닉네임)
+                listElement.innerHTML = `<p class="text-xl font-bold">${namesText}</p>`;
+            }
+
+
+            screens.loading.classList.add('hidden');
+            showScreen(screens.result);
+        }
+        
+        // --- API 호출 함수 (Exponential Backoff 적용) ---
+
+        async function fetchWithRetry(payload, maxRetries = 3) {
+            for (let i = 0; i < maxRetries; i++) {
+                try {
+                    const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (response.ok) {
+                        return await response.json();
+                    } else {
+                        const errorBody = await response.text();
+                        console.error(`API Error (Status ${response.status}):`, errorBody);
+                        if (response.status === 429 && i < maxRetries - 1) {
+                            // 429 Too Many Requests, retry
+                            const delay = Math.pow(2, i) * 1000 + Math.random() * 1000;
+                            await new Promise(resolve => setTimeout(resolve, delay));
+                            continue;
+                        }
+                        throw new Error(`API 호출 실패: 상태 코드 ${response.status}`);
+                    }
+                } catch (error) {
+                    console.error('Fetch Error:', error);
+                    if (i === maxRetries - 1) {
+                        throw new Error('네트워크 또는 서버 오류로 인해 요청에 실패했습니다.');
+                    }
+                    const delay = Math.pow(2, i) * 1000 + Math.random() * 1000;
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                }
+            }
+        }
+
+
+        // --- 이름 생성 로직 ---
+
+        async function generateName(inputData, isConvert) {
+            screens.loading.classList.remove('hidden');
+            showScreen(screens.loading);
+            screens.error.classList.add('hidden');
+
+            const { type, personality, appearance, feature, length, realName, convertType, quantity } = inputData;
+            let systemPrompt;
+            let userQuery;
+            let resultLabel;
+            
+            // --- 시스템 프롬프트 정의 로직 시작 ---
+            const baseSystemPrompt = "당신은 사용자 맞춤 이름을 생성하는 전문가입니다. 현실적이며 흔히 사용되는 것처럼 자연스러운 이름을 생성합니다.";
+
+            if (isConvert) {
+                // 실제 이름 변환 로직
+                resultLabel = `${convertType} (변환됨, ${quantity}개):`;
+
+                if (convertType === '일본어') {
+                    // 일본어 변환 요청 시: 이름과 한국어 발음을 함께 출력하도록 요청
+                    systemPrompt = `${baseSystemPrompt} 한국어 이름 '${realName}'을(를) 해당 언어권에서 실제 흔히 쓰이는 이름처럼 자연스럽고 문화에 적합한 하나의 ${convertType} 이름으로 **${quantity}가지 종류로** 변환합니다. 변환된 이름과 그 옆에 **괄호로 한국어 발음(한글)을 함께 출력**합니다. (예: * 다나카 하루(다나카 하루)) 생성된 이름들을 **번호 없는 목록(마크다운 불릿 리스트: *)** 형식으로 출력하세요. 어떠한 설명이나 추가 텍스트 없이 이름 목록만 출력하세요.`;
+                } else {
+                    // 영어 변환 요청 시: 이름만 출력
+                    systemPrompt = `${baseSystemPrompt} 한국어 이름 '${realName}'을(를) 자연스럽고 해당 언어권 문화에 적합한 하나의 ${convertType} 이름으로 **${quantity}가지 종류로** 변환합니다. 생성된 이름들을 **번호 없는 목록(마크다운 불릿 리스트: * )** 형식으로 출력하세요. 어떠한 설명이나 추가 텍스트 없이 이름 목록만 출력하세요.`;
+                }
+                userQuery = `한국어 이름: ${realName}. 변환할 언어: ${convertType}.`;
+
+            } else {
+                // 맞춤 이름 생성 로직
+                resultLabel = `${type} (맞춤 생성, ${quantity}개):`;
+
+                if (type === '일본어 이름') {
+                    // 일본어 생성 요청 시: 이름과 한국어 발음을 함께 출력하도록 요청
+                    systemPrompt = `${baseSystemPrompt} 사용자가 제공한 성격, 외모, 특징을 바탕으로 하나의 ${type}을(를) **${quantity}가지 종류로** 생성합니다. 생성된 이름과 그 옆에 **괄호로 한국어 발음(한글)을 함께 출력**합니다. (예: * 이케다 미나미(이케다 미나미)) 생성된 이름들을 **번호 없는 목록(마크다운 불릿 리스트: * )** 형식으로 출력하세요. 어떠한 설명이나 추가 텍스트 없이 이름 목록만 출력하세요.`;
+                } else {
+                    // 기타 이름 생성 요청 시: 이름만 출력
+                    let lengthConstraint = '';
+                    if (type === '닉네임' && length) {
+                        lengthConstraint = `글자 수 제한: ${length}글자로 반드시 맞추세요.`;
+                    }
+                    systemPrompt = `${baseSystemPrompt} 사용자가 제공한 성격, 외모, 특징을 바탕으로 하나의 ${type}을(를) **${quantity}가지 종류로** 생성합니다. ${lengthConstraint} 생성된 이름들을 **번호 없는 목록(마크다운 불릿 리스트: * )** 형식으로 출력하세요. 어떠한 설명이나 추가 텍스트 없이 이름 목록만 출력하세요.`;
+                }
+                
+                userQuery = `사용자의 성격: ${personality}, 외모: ${appearance}, 부각하고 싶은 특징: ${feature}. 원하는 이름 타입: ${type}.`;
+            }
+            // --- 시스템 프롬프트 정의 로직 끝 ---
+
+            const payload = {
+                contents: [{ parts: [{ text: userQuery }] }],
+                systemInstruction: { parts: [{ text: systemPrompt }] },
+            };
+
+            try {
+                const result = await fetchWithRetry(payload);
+                const generatedText = result.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+
+                if (generatedText) {
+                    showResult(generatedText.replace(/^['"]|['"]$/g, ''), resultLabel); // 따옴표 제거
+                } else {
+                    showError("API에서 유효한 이름을 생성하지 못했습니다. 입력을 다시 확인해주세요.");
+                }
+
+            } catch (error) {
+                showError(error.message);
+                console.error('Generation Error:', error);
+                showScreen(isConvert ? screens.convert : screens.input); // 실패 시 이전 화면으로 복귀
+            }
+        }
+
+        // --- 이벤트 핸들러 ---
+
+        function handleGetInputData(isConvert) {
+            if (isConvert) {
+                const realName = document.getElementById('real-name').value.trim();
+                const convertType = document.getElementById('convert-type').value;
+                const quantity = parseInt(document.getElementById('convert-quantity').value, 10);
+
+
+                if (!realName) {
+                    showError("실제 한국어 이름을 입력해주세요.");
+                    return null;
+                }
+                if (isNaN(quantity) || quantity < 1 || quantity > 10) {
+                    showError("생성할 이름 개수는 1개에서 10개 사이여야 합니다.");
+                    return null;
+                }
+
+                return { realName, convertType, quantity };
+
+            } else {
+                const personality = document.getElementById('personality').value.trim();
+                const appearance = document.getElementById('appearance').value.trim();
+                const feature = document.getElementById('feature').value.trim();
+                const type = currentNameType;
+                const quantity = parseInt(document.getElementById('quantity').value, 10);
+                
+                if (!personality || !appearance || !feature) {
+                    showError("모든 입력란 (성격, 외모, 특징)을 채워주세요.");
+                    return null;
+                }
+                if (isNaN(quantity) || quantity < 1 || quantity > 10) {
+                    showError("생성할 이름 개수는 1개에서 10개 사이여야 합니다.");
+                    return null;
+                }
+
+
+                let length = null;
+                if (type === '닉네임') {
+                    length = parseInt(document.getElementById('nickname-length').value, 10);
+                    if (isNaN(length) || length < 2 || length > 10) {
+                        showError("닉네임 글자 수는 2글자에서 10글자 사이로 설정해야 합니다.");
+                        return null;
+                    }
+                }
+
+                return { type, personality, appearance, feature, length, quantity };
+            }
+        }
+
+        async function handleGenerate() {
+            const inputData = handleGetInputData(false);
+            if (inputData) {
+                lastInputData = inputData;
+                await generateName(inputData, false);
+            } else {
+                // 오류 메시지는 이미 showError에서 처리됨
+                showScreen(screens.input);
+            }
+        }
+
+        async function handleRealNameConvert() {
+            const inputData = handleGetInputData(true);
+            if (inputData) {
+                lastInputData = { 
+                    ...inputData, 
+                    type: '변환', 
+                    realName: inputData.realName, 
+                    convertType: inputData.convertType,
+                    quantity: inputData.quantity // quantity 추가
+                }; 
+                await generateName(inputData, true);
+            } else {
+                showScreen(screens.convert);
+            }
+        }
+
+        async function handleRegenerate() {
+            if (lastInputData.type === '변환') {
+                // 실제 이름 변환 재생성
+                await generateName(lastInputData, true);
+            } else if (lastInputData.type) {
+                // 맞춤 이름 생성 재생성
+                await generateName(lastInputData, false);
+            } else {
+                showError("재생성할 이전 데이터가 없습니다. 처음부터 다시 시작해주세요.");
+                showStartScreen();
+            }
+        }
+
+        // --- 이벤트 리스너 연결 ---
+        window.onload = () => {
+            lucide.createIcons(); // 아이콘 초기화
+
+            // 1. 시작 화면 버튼
+            document.querySelectorAll('.name-type-btn').forEach(button => {
+                button.addEventListener('click', () => showInput(button.dataset.type));
+            });
+            document.getElementById('show-convert-btn').addEventListener('click', showConvertScreen);
+
+            // 2. 입력 화면 버튼
+            document.getElementById('back-from-input-btn').addEventListener('click', showStartScreen);
+            document.getElementById('generate-btn').addEventListener('click', handleGenerate);
+
+            // 3. 변환 화면 버튼
+            document.getElementById('back-from-convert-btn').addEventListener('click', showStartScreen);
+            document.getElementById('convert-btn').addEventListener('click', handleRealNameConvert);
+
+            // 4. 결과 화면 버튼
+            document.getElementById('regenerate-btn').addEventListener('click', handleRegenerate);
+            document.getElementById('back-to-start-btn').addEventListener('click', showStartScreen);
+
+            showStartScreen();
+        };
+
+    </script>
+</body>
+</html>
+
